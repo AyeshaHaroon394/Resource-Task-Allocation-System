@@ -1,0 +1,185 @@
+create database ass3;
+use ass3;
+
+-- Table creation for skill
+CREATE TABLE skill (
+  id INT NOT NULL AUTO_INCREMENT,
+  language VARCHAR(255) NOT NULL,
+  level CHAR(1) NOT NULL,
+  experience INT NOT NULL,
+  PRIMARY KEY (id)
+);
+
+-- Table creation for student
+CREATE TABLE student (
+  id INT NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  PRIMARY KEY (id)
+);
+
+-- Table creation for student_skills
+CREATE TABLE student_skills (
+  student_id INT NOT NULL,
+  skill_id INT NOT NULL,
+  FOREIGN KEY (student_id) REFERENCES student(id),
+  FOREIGN KEY (skill_id) REFERENCES skill(id)
+);
+
+-- Table creation for task
+CREATE TABLE task (
+  id INT NOT NULL AUTO_INCREMENT,
+  task_name VARCHAR(255) NOT NULL,
+  PRIMARY KEY (id)
+);
+
+-- Table creation for task_requirements
+CREATE TABLE task_requirements (
+  task_id INT NOT NULL,
+  skill_id INT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES task(id),
+  FOREIGN KEY (skill_id) REFERENCES skill(id)
+);
+
+CREATE VIEW StudentWithSkills AS
+SELECT 
+    s.id AS student_id,
+    s.name AS student_name,
+    GROUP_CONCAT(sk.language SEPARATOR ', ') AS skills,
+    GROUP_CONCAT(sk.level SEPARATOR ', ') AS levels
+FROM 
+    student s
+JOIN 
+    student_skills ss ON s.id = ss.student_id
+JOIN 
+    skill sk ON ss.skill_id = sk.id
+GROUP BY 
+    s.id, s.name;
+    
+ALTER VIEW StudentWithSkills AS
+SELECT 
+    s.id AS student_id,
+    s.name AS student_name,
+    GROUP_CONCAT(sk.language SEPARATOR ', ') AS skills,
+    GROUP_CONCAT(sk.level SEPARATOR ', ') AS levels,
+    GROUP_CONCAT(sk.experience SEPARATOR ', ') AS experiences
+FROM 
+    student s
+JOIN 
+    student_skills ss ON s.id = ss.student_id
+JOIN 
+    skill sk ON ss.skill_id = sk.id
+GROUP BY 
+    s.id, s.name;
+
+
+
+CREATE VIEW TaskWithSkills AS
+SELECT 
+    t.id AS task_id, 
+    t.task_name, 
+    GROUP_CONCAT(sk.language SEPARATOR ', ') AS skills, 
+    GROUP_CONCAT(sk.level SEPARATOR ', ') AS levels 
+FROM 
+    task t
+JOIN 
+    task_requirements tr ON t.id = tr.task_id
+JOIN 
+    skill sk ON tr.skill_id = sk.id
+GROUP BY 
+    t.id, t.task_name;
+    
+ALTER TABLE task_requirements
+DROP FOREIGN KEY task_requirements_ibfk_1, -- Replace with actual FK constraint name
+ADD FOREIGN KEY (task_id) REFERENCES task(id) ON DELETE CASCADE;
+
+ALTER TABLE task_requirements
+DROP FOREIGN KEY task_requirements_ibfk_2, -- Replace with actual FK constraint name
+ADD FOREIGN KEY (skill_id) REFERENCES skill(id) ON DELETE CASCADE;
+
+-- Drop the existing foreign key constraints if they exist
+ALTER TABLE student_skills
+ADD FOREIGN KEY (student_id) REFERENCES student(id) ON DELETE CASCADE;
+
+ALTER TABLE student_skills
+ADD FOREIGN KEY (skill_id) REFERENCES skill(id) ON DELETE CASCADE;
+
+
+-----------------------------------------
+CREATE VIEW taskReqs AS
+SELECT
+    t.id AS task_id,
+    sk.language AS skill_name,
+    sk.level AS skill_level
+FROM
+    task_requirements tr
+JOIN
+    skill sk ON tr.skill_id = sk.id
+JOIN
+    task t ON tr.task_id = t.id;
+
+select*from taskReqs;
+
+CREATE VIEW studentReqs AS
+SELECT
+    s.id AS student_id,
+    sk.language AS skill_name,
+    sk.level AS skill_level
+FROM
+    student_skills ss
+JOIN
+    skill sk ON ss.skill_id = sk.id
+JOIN
+    student s ON ss.student_id = s.id;
+
+select*from studentReqs;
+
+-- Create a view for ExactMatch based on the first query
+CREATE VIEW ExactMatch AS
+SELECT DISTINCT
+    s.student_id,
+    s.student_name,
+    t.task_id,
+    t.task_name
+FROM
+    StudentWithSkills s
+JOIN
+    TaskWithSkills t ON s.skills = t.skills AND s.levels = t.levels
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM
+        taskReqs tr
+    WHERE
+        tr.task_id = t.task_id
+        AND tr.skill_name NOT IN (
+            SELECT skill_name
+            FROM studentSkills ss
+            WHERE ss.student_id = s.student_id
+        )
+);
+
+-- Create a view for ExactMatch based on the second query
+CREATE VIEW SkillOnlyMatch AS
+SELECT DISTINCT
+    s.student_id,
+    s.student_name,
+    t.task_id,
+    t.task_name
+FROM
+    StudentWithSkills s
+JOIN
+    TaskWithSkills t ON s.skills = t.skills
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM
+        taskReqs tr
+    WHERE
+        tr.task_id = t.task_id
+        AND tr.skill_name NOT IN (
+            SELECT skill_name
+            FROM studentSkills ss
+            WHERE ss.student_id = s.student_id
+        )
+);
+
+select*from ExactMatch;
+select*from SkillOnlyMatch;
